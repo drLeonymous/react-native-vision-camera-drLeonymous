@@ -14,6 +14,7 @@ import com.facebook.react.bridge.WritableMap
 import com.mrousavy.camera.core.CameraSession
 import com.mrousavy.camera.core.InsufficientStorageError
 import com.mrousavy.camera.types.Flash
+import com.mrousavy.camera.types.Orientation
 import com.mrousavy.camera.types.QualityPrioritization
 import com.mrousavy.camera.utils.*
 import java.io.File
@@ -46,7 +47,7 @@ suspend fun CameraView.takePhoto(optionsMap: ReadableMap): WritableMap {
     enableShutterSound,
     enableAutoStabilization,
     enablePrecapture,
-    orientation
+    cameraSession.orientation
   )
 
   photo.use {
@@ -78,23 +79,20 @@ suspend fun CameraView.takePhoto(optionsMap: ReadableMap): WritableMap {
   }
 }
 
+private val matrix = Matrix()
 private fun writePhotoToFile(photo: CameraSession.CapturedPhoto, file: File) {
   val byteBuffer = photo.image.planes[0].buffer
-  if (photo.isMirrored) {
     val imageBytes = ByteArray(byteBuffer.remaining()).apply { byteBuffer.get(this) }
     val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-    val matrix = Matrix()
-    matrix.preScale(-1f, 1f)
-    val processedBitmap =
-      Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, false)
+    matrix.reset()
+    if(photo.isMirrored) {
+      matrix.preScale(-1f, 1f)
+    }
+    matrix.postRotate(90f)
+    val processedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, false)
     FileOutputStream(file).use { stream ->
       processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
     }
-  } else {
-    val channel = FileOutputStream(file).channel
-    channel.write(byteBuffer)
-    channel.close()
-  }
 }
 
 private suspend fun savePhotoToFile(
